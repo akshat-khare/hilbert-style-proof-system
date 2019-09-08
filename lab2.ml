@@ -88,6 +88,51 @@ let graft proof prooflist = let finGaama = (match (hd prooflist) with
 											| ModusPonus (g, p, left, right) -> g) in
 							graftAndReplace proof prooflist finGaama
 							;;
+exception NotInList;;
+exception ModusPonusViolation;;
+
+let rec removeFromList l a = match l with
+| [] -> raise NotInList
+| x::xs -> if(x=a) then xs else x::(removeFromList xs a)
+;;
+
+let proofPImpliesP gaama p = let q = Impl(p, Impl(L("qfresh"),p)) in
+								let r = Impl(p, Impl(Impl(q,p), p)) in
+								let kdownpropMP = Impl(q, Impl(p,p)) in
+								let kuppropMP = Impl(r, Impl(Impl(p, Impl(q,p)),Impl(p,p))) in
+								let sAxiom = Axiom(gaama, kuppropMP, S(p, Impl(q,p), p)) in
+								let kupAxiom = Axiom(gaama, r, K(p, Impl(q,p))) in
+								let leftSubtree = ModusPonus(gaama,kdownpropMP,sAxiom,kupAxiom) in
+								let rightSubTree = Axiom(gaama, q, K(p, L("qfresh"))) in
+								ModusPonus(gaama, Impl(p,p), leftSubtree, rightSubTree)
+							;;
+
+let rec dedthmreal proof p trimmedGaama = match proof with
+| Axiom (g, q, a) ->if (q=p) 
+					then (proofPImpliesP trimmedGaama p) 
+					else (
+						let leftSubtree = Axiom (trimmedGaama, Impl(q, Impl(p, q)), K (q, p)) in
+						let rightSubTree = Axiom (trimmedGaama, q, a) in
+						ModusPonus(trimmedGaama, Impl(p, q), leftSubtree, rightSubTree)
+					)
+						
+| ModusPonus (g, q, left, right) -> if (q=p) 
+									then (proofPImpliesP trimmedGaama p)
+									else (
+										let leftDerivedProof = (dedthmreal left p trimmedGaama) in
+										let rightDerivedProof = (dedthmreal right p trimmedGaama) in
+										let r = (match (extractProp left) with
+												| Impl(rmatch, qmatch) -> rmatch
+												| _ -> raise ModusPonusViolation) in
+										let sLeftPartTree = Axiom(trimmedGaama, (generateS p r q), (S(p, r, q))) in
+										let finLeft = ModusPonus(trimmedGaama, Impl(Impl(p,r),Impl(p,q)),sLeftPartTree, leftDerivedProof) in
+										ModusPonus(trimmedGaama, Impl(p,q), finLeft, rightDerivedProof)
+									) 
+								;;
+let dedthm proof p = match proof with
+| Axiom (g, p, a) -> dedthmreal proof p (removeFromList g p)
+| ModusPonus (g, p, left, right) -> dedthmreal proof p (removeFromList g p)
+;;
 
 
 
