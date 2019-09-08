@@ -1,0 +1,13 @@
+#use "lab2.ml";;
+let expandPimpliesP = proofPImpliesP [] (L("p")) (L("q")) ;;
+let validityPimpliesP = valid_hprooftree expandPimpliesP;;
+let p = L("p");;
+let q = L("q");;
+let r = L("r");;
+let s = L("s");;
+let g = [Impl(p,q);p;s];;
+let p1 = ModusPonus(g, q, Axiom(g,Impl(p,q), Ass), Axiom(g, p, Ass));;
+let ded = dedthm p1 p;;
+let pruned = prune ded;;
+let removal = removeFromList g p;;
+let mingam = minimalGaama ded;;

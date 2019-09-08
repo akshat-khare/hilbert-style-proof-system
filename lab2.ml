@@ -3,6 +3,18 @@ type prop = T| F | L of string
 			| Not of prop
 			| Impl of prop * prop
 		;;
+let rec isSameProp a b = match (a,b) with
+| (T,T) -> true
+| (F,F) -> true
+| (L(c), L(d)) -> if(c=d) then true else false
+| (Not(c), Not(d)) -> (isSameProp c d)
+| (Impl(c, d), Impl(e, f)) -> (isSameProp c e) && (isSameProp d f)
+| _ -> false
+;;
+let rec isMember a l = match l with
+| [] -> false
+| x::xs -> if((isSameProp x a)) then true else (isMember a xs)
+;;
 type gamma = prop list;;
 type axiom = Ass
 			| K of prop * prop
@@ -20,28 +32,28 @@ let extractProp proof = match proof with
 | ModusPonus(g, p, left, right) -> p
 ;;
 let isValidAxiom g rp a = match a with
-| Ass -> mem rp g
+| Ass -> isMember rp g
 | K (p, q) -> let proxyProp = generateK p q in
-					rp = proxyProp
+					isSameProp rp proxyProp
 | S (p, q, r) -> let proxyProp = generateS p q r in
-						rp = proxyProp
+						isSameProp rp proxyProp
 | R (p, q) -> let proxyProp = generateR p q in
-				rp = proxyProp
+				isSameProp rp proxyProp
 				;;
 
 let rec valid_hprooftree proof = match proof with
 | Axiom (g, p, a) -> isValidAxiom g p a
-| ModusPonus (g, p, left, right) -> let leftProp = extractProp left in
+| ModusPonus (g, q, left, right) -> let leftProp = extractProp left in
 									let rightProp = extractProp right in
-									let proxyProp = Impl(rightProp, p) in
-									if(leftProp=proxyProp) 
+									let proxyProp = Impl(rightProp, q) in
+									if(isSameProp leftProp proxyProp) 
 										then((valid_hprooftree left) && (valid_hprooftree right)) 
 									else false
 								;;
 
 let rec mergeList g delta = match delta with
 | [] -> g
-| x::xs -> if(mem x g) then (mergeList g xs) else (mergeList (g@[x]) xs)
+| x::xs -> if(isMember x g) then (mergeList g xs) else (mergeList (g@[x]) xs)
 ;;
 
 let rec pad (proof, delta) = match proof with
@@ -51,7 +63,7 @@ let rec pad (proof, delta) = match proof with
 
 let rec minimalGaama proof = match proof with
 | Axiom (g, p, a) -> (match a with
-					| Ass -> g
+					| Ass -> [p]
 					| _ -> [])
 | ModusPonus (g, p, left, right) -> mergeList (minimalGaama left) (minimalGaama right)
 ;;
@@ -70,8 +82,8 @@ exception Wronggraft;;
 let rec findProp prop prooflist = match prooflist with
 | [] -> raise Wronggraft
 | x::xs -> (match x with
-			| Axiom (g, p, a) -> if(prop=p) then x else (findProp prop xs)
-			| ModusPonus (g, p, left, right) -> if(prop=p) then x else (findProp prop xs))
+			| Axiom (g, p, a) -> if(isSameProp prop p) then x else (findProp prop xs)
+			| ModusPonus (g, p, left, right) -> if(isSameProp prop p) then x else (findProp prop xs))
 ;;
 
 let rec graftAndReplace proof prooflist finGaama = match proof with
@@ -92,35 +104,35 @@ exception NotInList;;
 exception ModusPonusViolation;;
 
 let rec removeFromList l a = match l with
-| [] -> raise NotInList
-| x::xs -> if(x=a) then xs else x::(removeFromList xs a)
+| [] -> []
+| x::xs -> if(isSameProp x a) then xs else x::(removeFromList xs a)
 ;;
 
-let proofPImpliesP gaama p = let q = Impl(p, Impl(L("qfresh"),p)) in
-								let r = Impl(p, Impl(Impl(q,p), p)) in
+let proofPImpliesP gaama p sampleq= let q = Impl(p, Impl(sampleq,p)) in
+								let r = Impl(p, Impl(Impl(sampleq,p), p)) in
 								let kdownpropMP = Impl(q, Impl(p,p)) in
-								let kuppropMP = Impl(r, Impl(Impl(p, Impl(q,p)),Impl(p,p))) in
-								let sAxiom = Axiom(gaama, kuppropMP, S(p, Impl(q,p), p)) in
-								let kupAxiom = Axiom(gaama, r, K(p, Impl(q,p))) in
+								let kuppropMP = Impl(r, Impl(Impl(p, Impl(sampleq,p)),Impl(p,p))) in
+								let sAxiom = Axiom(gaama, kuppropMP, S(p, Impl(sampleq,p), p)) in
+								let kupAxiom = Axiom(gaama, r, K(p, Impl(sampleq,p))) in
 								let leftSubtree = ModusPonus(gaama,kdownpropMP,sAxiom,kupAxiom) in
-								let rightSubTree = Axiom(gaama, q, K(p, L("qfresh"))) in
+								let rightSubTree = Axiom(gaama, q, K(p, sampleq)) in
 								ModusPonus(gaama, Impl(p,p), leftSubtree, rightSubTree)
 							;;
 
-let rec dedthmreal proof p trimmedGaama = match proof with
-| Axiom (g, q, a) ->if (q=p) 
-					then (proofPImpliesP trimmedGaama p) 
+let rec dedthmreal proof p trimmedGaama freshvar= match proof with
+| Axiom (g, q, a) ->if (isSameProp q p) 
+					then (proofPImpliesP trimmedGaama p freshvar) 
 					else (
 						let leftSubtree = Axiom (trimmedGaama, Impl(q, Impl(p, q)), K (q, p)) in
 						let rightSubTree = Axiom (trimmedGaama, q, a) in
 						ModusPonus(trimmedGaama, Impl(p, q), leftSubtree, rightSubTree)
 					)
 						
-| ModusPonus (g, q, left, right) -> if (q=p) 
-									then (proofPImpliesP trimmedGaama p)
+| ModusPonus (g, q, left, right) -> if (isSameProp q p) 
+									then (proofPImpliesP trimmedGaama p freshvar)
 									else (
-										let leftDerivedProof = (dedthmreal left p trimmedGaama) in
-										let rightDerivedProof = (dedthmreal right p trimmedGaama) in
+										let leftDerivedProof = (dedthmreal left p trimmedGaama freshvar) in
+										let rightDerivedProof = (dedthmreal right p trimmedGaama freshvar) in
 										let r = (match (extractProp left) with
 												| Impl(rmatch, qmatch) -> rmatch
 												| _ -> raise ModusPonusViolation) in
@@ -129,9 +141,9 @@ let rec dedthmreal proof p trimmedGaama = match proof with
 										ModusPonus(trimmedGaama, Impl(p,q), finLeft, rightDerivedProof)
 									) 
 								;;
-let dedthm proof p = match proof with
-| Axiom (g, p, a) -> dedthmreal proof p (removeFromList g p)
-| ModusPonus (g, p, left, right) -> dedthmreal proof p (removeFromList g p)
+let dedthm proof propInsideList = match proof with
+| Axiom (g, p, a) -> dedthmreal proof propInsideList (removeFromList g propInsideList) T
+| ModusPonus (g, p, left, right) -> dedthmreal proof propInsideList (removeFromList g propInsideList) T
 ;;
 
 
