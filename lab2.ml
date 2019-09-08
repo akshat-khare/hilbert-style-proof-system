@@ -38,3 +38,56 @@ let rec valid_hprooftree proof = match proof with
 										then((valid_hprooftree left) && (valid_hprooftree right)) 
 									else false
 								;;
+
+let rec mergeList g delta = match delta with
+| [] -> g
+| x::xs -> if(mem x g) then (mergeList g xs) else (mergeList (g@[x]) xs)
+;;
+
+let rec pad (proof, delta) = match proof with
+| Axiom (g, p, a) -> Axiom((mergeList g delta), p, a)
+| ModusPonus (g, p, left, right) -> ModusPonus((mergeList g delta), p, pad(left, delta), pad(right, delta))
+;;
+
+let rec minimalGaama proof = match proof with
+| Axiom (g, p, a) -> (match a with
+					| Ass -> g
+					| _ -> [])
+| ModusPonus (g, p, left, right) -> mergeList (minimalGaama left) (minimalGaama right)
+;;
+
+let rec setGamma minGaama proof = match proof with
+| Axiom (g, p, a) -> Axiom(minGaama, p, a)
+| ModusPonus (g, p, left, right) -> ModusPonus(minGaama, p, (setGamma minGaama left), (setGamma minGaama right))
+;;
+
+let prune proof = let minGaama = minimalGaama proof in
+					setGamma minGaama proof
+				;;
+
+exception Wronggraft;;
+
+let rec findProp prop prooflist = match prooflist with
+| [] -> raise Wronggraft
+| x::xs -> (match x with
+			| Axiom (g, p, a) -> if(prop=p) then x else (findProp prop xs)
+			| ModusPonus (g, p, left, right) -> if(prop=p) then x else (findProp prop xs))
+;;
+
+let rec graftAndReplace proof prooflist finGaama = match proof with
+| Axiom (g, p, a) -> (match a with
+					| Ass -> (findProp p prooflist)
+					| _ -> Axiom (finGaama, p, a))
+| ModusPonus (g, p, left, right) -> ModusPonus (finGaama, p, 
+									(graftAndReplace left prooflist finGaama),
+									(graftAndReplace right prooflist finGaama))
+;;
+
+let graft proof prooflist = let finGaama = (match (hd prooflist) with
+											| Axiom (g, p, a) -> g
+											| ModusPonus (g, p, left, right) -> g) in
+							graftAndReplace proof prooflist finGaama
+							;;
+
+
+
