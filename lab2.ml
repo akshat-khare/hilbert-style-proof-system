@@ -15,6 +15,9 @@ let rec isMember a l = match l with
 | [] -> false
 | x::xs -> if((isSameProp x a)) then true else (isMember a xs)
 ;;
+let rec isContained l1 l2 = match l1 with
+| [] -> true
+| x::xs -> if(isMember x l2) then (isContained xs l2) else false
 type gamma = prop list;;
 type axiom = Ass
 			| K of prop * prop
@@ -31,6 +34,11 @@ let extractProp proof = match proof with
 | Axiom(g, p, a) -> p
 | ModusPonus(g, p, left, right) -> p
 ;;
+let extractGaama proof = match proof with
+| Axiom(g, p, a) -> g
+| ModusPonus(g, p, left, right) -> g
+;;
+
 let isValidAxiom g rp a = match a with
 | Ass -> isMember rp g
 | K (p, q) -> let proxyProp = generateK p q in
@@ -45,9 +53,15 @@ let rec valid_hprooftree proof = match proof with
 | Axiom (g, p, a) -> isValidAxiom g p a
 | ModusPonus (g, q, left, right) -> let leftProp = extractProp left in
 									let rightProp = extractProp right in
-									let proxyProp = Impl(rightProp, q) in
-									if(isSameProp leftProp proxyProp) 
-										then((valid_hprooftree left) && (valid_hprooftree right)) 
+									let leftGaama = extractGaama left in
+									let rightGaama = extractGaama right in
+									if((isContained leftGaama rightGaama) && (isContained rightGaama leftGaama))
+										then(
+											let proxyProp = Impl(rightProp, q) in
+											if(isSameProp leftProp proxyProp) 
+												then((valid_hprooftree left) && (valid_hprooftree right)) 
+											else false
+										)
 									else false
 								;;
 
